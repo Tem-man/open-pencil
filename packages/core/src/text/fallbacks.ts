@@ -54,3 +54,21 @@ export function fontFallbackEntry(
 ): FontFallbackManifestEntry {
   return fontFallbackManifest(userAgent)[script]
 }
+
+export async function loadRemoteFallbackFamilies(
+  remoteFamilies: readonly string[],
+  existingFamilies: readonly string[],
+  loadFamily: (family: string) => Promise<boolean>
+): Promise<string[]> {
+  const pending = remoteFamilies.filter((family) => !existingFamilies.includes(family))
+  if (pending.length === 0) return []
+
+  const results = await Promise.allSettled(
+    pending.map(async (family) => ((await loadFamily(family)) ? family : null))
+  )
+  const loaded: string[] = []
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) loaded.push(result.value)
+  }
+  return loaded
+}

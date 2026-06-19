@@ -51,6 +51,13 @@ function hasRequiredFallbackFonts(text: string): boolean {
   return true
 }
 
+export function ensureCJKFallbackForText(text: string, onLoaded?: () => void): void {
+  if (!CJK_RE.test(text) || fontManager.getCJKFallbackFamilies().length > 0) return
+  void fontManager.ensureCJKFallback().then((families) => {
+    if (families.length > 0) onLoaded?.()
+  })
+}
+
 export function isNodeFontLoaded(_r: TextRenderer, node: SceneNode): boolean {
   const baseFamily = node.fontFamily || DEFAULT_FONT_FAMILY
   if (!fontManager.isStyleLoaded(baseFamily, weightToStyle(node.fontWeight, node.italic))) {

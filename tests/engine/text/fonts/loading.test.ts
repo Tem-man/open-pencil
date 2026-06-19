@@ -583,6 +583,12 @@ describe('fetchBundledFont', () => {
     expect(view.getUint32(0)).toBe(0x00010000)
   })
 
+  test('loads NotoSansSC-Regular.woff2 from assets in headless', async () => {
+    const buffer = await fontManager.fetchBundledFont('/NotoSansSC-Regular.woff2')
+    expect(buffer).toBeInstanceOf(ArrayBuffer)
+    expect(expectDefined(buffer, 'Noto Sans SC font buffer').byteLength).toBeGreaterThan(100_000)
+  })
+
   test('throws for nonexistent font', async () => {
     expect(fontManager.fetchBundledFont('/Nonexistent-Font.ttf')).rejects.toThrow()
   })

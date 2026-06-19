@@ -23,6 +23,12 @@ export async function loadFonts(
   r.fontProvider = r.ck.TypefaceFontProvider.Make()
 
   fontManager.attachProvider(r.ck, r.fontProvider)
+  fontManager.onCJKFallbackLoaded(() => {
+    if (!r.isDestroyed()) {
+      r.invalidateAllPictures()
+      onFallbackFontsLoaded?.()
+    }
+  })
 
   const fontData = await fontManager.loadFont(DEFAULT_FONT_FAMILY, 'Regular')
   if (r.isDestroyed()) return
@@ -48,12 +54,7 @@ export async function loadFonts(
   r.fontsLoaded = true
   r.invalidateAllPictures()
 
-  void fontManager.ensureCJKFallback().then((families) => {
-    if (!r.isDestroyed() && families.length > 0) {
-      r.invalidateAllPictures()
-      onFallbackFontsLoaded?.()
-    }
-  })
+  void fontManager.ensureCJKFallback()
   void fontManager.ensureArabicFallback().then((families) => {
     if (!r.isDestroyed() && families.length > 0) {
       r.invalidateAllPictures()

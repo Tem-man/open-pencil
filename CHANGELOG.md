@@ -10,6 +10,7 @@
 
 ### Fixes
 
+- Fix CJK text rendering when local font access or Google Fonts is unavailable by bundling Noto Sans SC and registering it as a reliable canvas fallback.
 - Fix clone operations (duplicate, instance creation, clipboard copy) sharing mutable references with the original — editing fills, strokes, variable bindings, overrides, or vector networks on one no longer corrupts the other.
 - Fix instance overrides shallow-copied on clone — override values containing objects are now deep-copied.
 - Fix stale variable bindings not cleaned up when fills/strokes arrays shrink — any indexed sub-path is now handled, not just `/color`.

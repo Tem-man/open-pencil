@@ -1,3 +1,5 @@
+import { fontManager } from '#core/text/fonts'
+
 import {
   createTextEditSession,
   resizeTextNodeForEdit,
@@ -19,7 +21,13 @@ export function createTextActions(ctx: EditorContext) {
     ctx.state.editingTextId = nodeId
     if (te) {
       te.setRenderer(ctx.getRenderer())
-      te.start(node)
+      void fontManager.ensureCJKFallback().then(() => {
+        if (ctx.state.editingTextId !== nodeId) return
+        const current = ctx.graph.getNode(nodeId)
+        if (!current) return
+        te.start(current)
+        ctx.requestRender()
+      })
     }
     ctx.requestRender()
   }

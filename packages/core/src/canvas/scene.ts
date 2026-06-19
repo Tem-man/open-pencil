@@ -19,6 +19,7 @@ import {
   getStrokeCapEntity,
   getStrokeJoinEntity
 } from './strokes'
+import { ensureCJKFallbackForText } from './text'
 import { drawFigmaDerivedText } from './text-derived'
 import { textNodeToOutlinePath } from './text-outlines'
 
@@ -662,6 +663,9 @@ export function renderText(r: SkiaRenderer, canvas: Canvas, node: SceneNode, fil
   }
 
   if (!r.isNodeFontLoaded(node)) {
+    ensureCJKFallbackForText(text, () => {
+      if (!r.isDestroyed()) r.invalidateAllPictures()
+    })
     canvas.restore()
     return
   }

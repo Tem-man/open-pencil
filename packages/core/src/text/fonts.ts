@@ -4,8 +4,12 @@ import { uniq } from 'es-toolkit/array'
 import { DEFAULT_FONT_FAMILY, IS_BROWSER, GOOGLE_FONTS_API_KEY } from '#core/constants'
 import type { SceneGraph } from '#core/scene-graph'
 import { fontFaceRenderFamily, parseFontStyle } from '#core/text/face'
-import { fontFallbackEntry } from '#core/text/fallbacks'
+import { FontCJKFallback, BUNDLED_CJK_FAMILY, BUNDLED_CJK_FONT_URL } from '#core/text/cjk-fallback'
+import { fontFallbackEntry, loadRemoteFallbackFamilies } from '#core/text/fallbacks'
 import type { FontFallbackScript } from '#core/text/fallbacks'
+import { chooseLocalFontMatch } from '#core/text/match'
+
+export { chooseLocalFontMatch } from '#core/text/match'
 
 export interface FontInfo {
   family: string
@@ -29,47 +33,21 @@ export interface DownloadedFontCache {
 
 type FindLocalFontOptions = { allowVariable?: boolean }
 
-type LocalFontMatch = Pick<FontInfo, 'family' | 'style'>
-
-export function chooseLocalFontMatch<T extends LocalFontMatch>(
-  fonts: T[],
-  family: string,
-  style?: string
-): T | undefined {
-  const families = [family]
-  const normalized = normalizeFontFamily(family)
-  if (normalized !== family) families.push(normalized)
-  const requested = parseFontStyle(style)
-
-  for (const f of families) {
-    const exact = style ? fonts.find((x) => x.family === f && x.style === style) : undefined
-    if (exact) return exact
-
-    const candidates = fonts.filter((x) => x.family === f)
-    const sameStyle = candidates.find((x) => {
-      const parsed = parseFontStyle(x.style)
-      return parsed.weight === requested.weight && parsed.italic === requested.italic
-    })
-    if (sameStyle) return sameStyle
-
-    if (style) continue
-
-    const sameSlant = candidates.filter((x) => parseFontStyle(x.style).italic === requested.italic)
-    if (sameSlant.length > 0) return sameSlant[0]
-
-    if (candidates.length > 0) return candidates[0]
-  }
-
-  return undefined
-}
-
 const BUNDLED_FONTS: Record<string, string> = {
   'Inter|Regular': '/Inter-Regular.ttf',
   'Inter|Medium': '/Inter-Medium.ttf',
   'Inter|SemiBold': '/Inter-SemiBold.ttf',
   'Inter|Bold': '/Inter-Bold.ttf',
   'Inter|ExtraBold': '/Inter-ExtraBold.ttf',
-  'Noto Naskh Arabic|Regular': '/NotoNaskhArabic-Regular.ttf'
+  'Noto Naskh Arabic|Regular': '/NotoNaskhArabic-Regular.ttf',
+  [`${BUNDLED_CJK_FAMILY}|Regular`]: BUNDLED_CJK_FONT_URL
+}
+
+function resolvePublicAssetUrl(path: string): string {
+  if (!IS_BROWSER || !path.startsWith('/')) return path
+  const base = 'env' in import.meta ? import.meta.env.BASE_URL : '/'
+  if (base === '/') return path
+  return `${base.replace(/\/$/, '')}${path}`
 }
 
 export const FONT_WEIGHT_NAMES: Record<number, string> = {
@@ -141,9 +119,22 @@ export class FontManager {
   private googleFamiliesPromise: Promise<string[]> | null = null
   private registeredRenderFamilies = new Set<string>()
   private cjkFallbackFamilies: string[] = []
-  private cjkFallbackPromise: Promise<string[]> | null = null
+  private readonly cjkController = new FontCJKFallback({
+    getFontProvider: () => this.fontProvider,
+    getFallbackUserAgent: () => this.fallbackUserAgent,
+    getCjkFallbackFamilies: () => this.cjkFallbackFamilies,
+    getLoadedFamilies: () => this.loadedFamilies,
+    fetchBundledFont: (url) => this.fetchBundledFont(url),
+    registerFontInCanvasKit: (family, data) => this.registerFontInCanvasKit(family, data),
+    registerAndCache: (family, style, buffer) => this.registerAndCache(family, style, buffer),
+    findLocalFont: (family, style, options) => this.findLocalFont(family, style, options),
+    loadFont: (family, style) => this.loadFont(family, style),
+    registerFontInBrowser: (family, style, data) => this.registerFontInBrowser(family, style, data),
+    onFallbackLoadFailed: () => this.scheduleCJKFallbackRetry()
+  })
   private arabicFallbackFamilies: string[] = []
   private arabicFallbackPromise: Promise<string[]> | null = null
+  private cjkRetryScheduled = false
 
   attachProvider(_canvasKit: CanvasKit, provider: TypefaceFontProvider): void {
     this.fontProvider = provider
@@ -152,6 +143,7 @@ export class FontManager {
       const family = cacheKey.slice(0, cacheKey.indexOf('|'))
       this.registerFontInCanvasKit(family, data)
     }
+    this.cjkController.applyBundledIfReady()
   }
 
   detachProvider(provider?: TypefaceFontProvider | null): void {
@@ -231,9 +223,21 @@ export class FontManager {
     this.googleFamiliesPromise = this.loadGoogleFamilies()
   }
 
+  /** Start downloading bundled CJK font early (safe before fontProvider exists). */
+  prefetchBundledCJKFont(): void {
+    this.cjkController.prefetch()
+  }
+
+  onCJKFallbackLoaded(callback: () => void): void {
+    this.cjkController.onLoaded(callback)
+  }
+
   async fetchBundledFont(url: string): Promise<ArrayBuffer | null> {
     if (IS_BROWSER) {
-      const response = await fetch(url)
+      const response = await fetch(resolvePublicAssetUrl(url))
+      if (!response.ok) {
+        throw new Error(`Bundled font fetch failed: ${url} (${response.status})`)
+      }
       return response.arrayBuffer()
     }
     const { readFile } = await import(/* @vite-ignore */ 'node:fs/promises')
@@ -345,13 +349,7 @@ export class FontManager {
   }
 
   async ensureCJKFallback(): Promise<string[]> {
-    if (this.cjkFallbackFamilies.length > 0) return this.cjkFallbackFamilies
-    if (this.cjkFallbackPromise) return this.cjkFallbackPromise
-
-    this.cjkFallbackPromise = this.ensureFallbackFamilies('cjk', this.cjkFallbackFamilies, {
-      allowVariableLocalFonts: true
-    })
-    return this.cjkFallbackPromise
+    return this.cjkController.ensure()
   }
 
   getCJKFallbackFamilies(): string[] {
@@ -362,6 +360,20 @@ export class FontManager {
     if (!this.cjkFallbackFamilies.includes(family)) {
       this.cjkFallbackFamilies.push(family)
     }
+  }
+
+  private scheduleCJKFallbackRetry(): void {
+    if (!IS_BROWSER || this.cjkFallbackFamilies.length > 0 || this.cjkRetryScheduled) return
+    this.cjkRetryScheduled = true
+
+    const handler = () => {
+      void this.cjkController.ensure()
+      window.removeEventListener('pointerdown', handler)
+      window.removeEventListener('keydown', handler)
+    }
+
+    window.addEventListener('pointerdown', handler, { passive: true })
+    window.addEventListener('keydown', handler, { passive: true })
   }
 
   async ensureArabicFallback(): Promise<string[]> {
@@ -412,15 +424,12 @@ export class FontManager {
     }
 
     if (targetFamilies.length === 0) {
-      const results = await Promise.allSettled(
-        manifest.remoteFamilies.map(async (family) => {
-          const data = await this.loadFont(family, 'Regular')
-          return data ? family : null
-        })
+      const loaded = await loadRemoteFallbackFamilies(
+        manifest.remoteFamilies,
+        targetFamilies,
+        async (family) => Boolean(await this.loadFont(family, 'Regular'))
       )
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) targetFamilies.push(result.value)
-      }
+      targetFamilies.push(...loaded)
     }
 
     return targetFamilies
