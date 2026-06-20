@@ -54,13 +54,16 @@ export async function loadFonts(
   r.fontsLoaded = true
   r.invalidateAllPictures()
 
-  void fontManager.ensureCJKFallback()
-  void fontManager.ensureArabicFallback().then((families) => {
-    if (!r.isDestroyed() && families.length > 0) {
-      r.invalidateAllPictures()
-      onFallbackFontsLoaded?.()
-    }
-  })
+  void fontManager.ensureCJKFallback().catch(() => {})
+  void fontManager
+    .ensureArabicFallback()
+    .then((families) => {
+      if (!r.isDestroyed() && families.length > 0) {
+        r.invalidateAllPictures()
+        onFallbackFontsLoaded?.()
+      }
+    })
+    .catch(() => {})
 }
 
 export async function prepareForExport(

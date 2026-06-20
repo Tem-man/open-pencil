@@ -9,7 +9,9 @@ import App from './App.vue'
 import router from './router'
 
 preloadFonts()
-void import('@open-pencil/core/text').then(({ fontManager }) => fontManager.prefetchBundledCJKFont())
+void import('@open-pencil/core/text').then(({ fontManager }) =>
+  fontManager.prefetchBundledCJKFont()
+)
 const head = createHead()
 createApp(App).use(router).use(head).mount('#app')
 

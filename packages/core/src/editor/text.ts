@@ -21,13 +21,16 @@ export function createTextActions(ctx: EditorContext) {
     ctx.state.editingTextId = nodeId
     if (te) {
       te.setRenderer(ctx.getRenderer())
-      void fontManager.ensureCJKFallback().then(() => {
-        if (ctx.state.editingTextId !== nodeId) return
-        const current = ctx.graph.getNode(nodeId)
-        if (!current) return
-        te.start(current)
-        ctx.requestRender()
-      })
+      void fontManager
+        .ensureCJKFallback()
+        .catch(() => [])
+        .then(() => {
+          if (ctx.state.editingTextId !== nodeId) return
+          const current = ctx.graph.getNode(nodeId)
+          if (!current) return
+          te.start(current)
+          ctx.requestRender()
+        })
     }
     ctx.requestRender()
   }

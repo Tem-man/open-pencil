@@ -49,5 +49,9 @@ vue-stream-markdown/
 # Agent scratch space (reviews, test artifacts)
 scratch/
 
+# Local development notes (not published to the repo)
+packages/docs/development/prototype-interactions.md
+packages/docs/development/html-export.md
+
 # OpenCode
 .opencode/
