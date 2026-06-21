@@ -54,7 +54,7 @@ export async function loadFonts(
   r.fontsLoaded = true
   r.invalidateAllPictures()
 
-  void fontManager.ensureCJKFallback().catch(() => {})
+  void fontManager.ensureCJKFallback().catch(() => undefined)
   void fontManager
     .ensureArabicFallback()
     .then((families) => {
@@ -63,7 +63,7 @@ export async function loadFonts(
         onFallbackFontsLoaded?.()
       }
     })
-    .catch(() => {})
+    .catch(() => undefined)
 }
 
 export async function prepareForExport(

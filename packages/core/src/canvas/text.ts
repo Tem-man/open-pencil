@@ -58,7 +58,7 @@ export function ensureCJKFallbackForText(text: string, onLoaded?: () => void): v
     .then((families) => {
       if (families.length > 0) onLoaded?.()
     })
-    .catch(() => {})
+    .catch(() => undefined)
 }
 
 export function isNodeFontLoaded(_r: TextRenderer, node: SceneNode): boolean {
